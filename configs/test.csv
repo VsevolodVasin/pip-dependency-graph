@@ -1,0 +1,6 @@
+key,value
+package_name,A
+repo,test_repos/basic.txt
+test_repo_mode,true
+version,1.0
+max_depth,5

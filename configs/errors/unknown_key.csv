@@ -1,0 +1,7 @@
+key,value
+package_name,requests
+repo,https://pypi.org/pypi
+test_repo_mode,false
+version,2.31.0
+max_depth,3
+color,red
