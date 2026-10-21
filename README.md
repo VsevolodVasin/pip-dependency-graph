@@ -61,6 +61,7 @@ max_depth,3
 ./scripts/stage1_config.sh
 ./scripts/stage1_errors.sh
 ./scripts/stage1_all.sh
+./scripts/run_tests.sh      # unittest из tests/
 ```
 
 ## Структура
@@ -68,6 +69,7 @@ max_depth,3
 ```
 pip-dependency-graph/
 ├── src/          # main.py, config.py
+├── tests/        # unittest
 ├── configs/      # конфиги, configs/errors/ — с ошибками
 ├── test_repos/   # тестовые репозитории
 ├── scripts/      # bash-обёртки для прогона тестов

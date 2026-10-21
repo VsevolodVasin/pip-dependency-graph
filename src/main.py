@@ -1,24 +1,33 @@
+"""Точка входа визуализатора графа зависимостей pip-пакетов."""
+
 import argparse
 import sys
 
 from config import ConfigError, load_config
 
 
-def parse_args():
-    p = argparse.ArgumentParser(description="Визуализатор графа зависимостей pip-пакетов")
-    p.add_argument("--config", default="config.csv", help="путь к CSV-конфигу")
-    return p.parse_args()
+def parse_args(argv=None):
+    """Разбирает аргументы командной строки."""
+    p = argparse.ArgumentParser(
+        description="Визуализатор графа зависимостей pip-пакетов"
+    )
+    p.add_argument(
+        "--config", default="config.csv", help="путь к CSV-конфигу"
+    )
+    return p.parse_args(argv)
 
 
 def print_config(cfg):
+    """Печатает параметры в формате ключ=значение."""
     for key, value in cfg.items():
         if isinstance(value, bool):
             value = str(value).lower()
         print(f"{key}={value}")
 
 
-def run():
-    args = parse_args()
+def run(argv=None):
+    """Загружает конфиг и печатает его, при ошибке возвращает 1."""
+    args = parse_args(argv)
     try:
         cfg = load_config(args.config)
     except ConfigError as e:

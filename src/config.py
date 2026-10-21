@@ -1,3 +1,5 @@
+"""Чтение и проверка CSV-конфигурации."""
+
 import csv
 import os
 import re
@@ -5,18 +7,21 @@ from urllib.parse import urlparse
 
 
 class ConfigError(Exception):
-    pass
+    """Ошибка конфигурации."""
 
 
 KEYS = ("package_name", "repo", "test_repo_mode", "version", "max_depth")
 
-# PEP 508
-NAME_RE = re.compile(r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE)
-# PEP 440 (упрощённо): 1.2.3, 2.0rc1, 1.0.post1, 1.0.dev2
-VERSION_RE = re.compile(r"^\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?$")
+NAME_RE = re.compile(
+    r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE
+)
+VERSION_RE = re.compile(
+    r"^\d+(\.\d+)*((a|b|rc)\d+)?(\.post\d+)?(\.dev\d+)?$"
+)
 
 
 def read_csv(path):
+    """Читает CSV вида key,value и возвращает словарь параметров."""
     if not os.path.isfile(path):
         raise ConfigError(f"config file not found: {path}")
     with open(path, newline="", encoding="utf-8") as f:
@@ -38,21 +43,28 @@ def read_csv(path):
 
 
 def parse_package_name(value):
+    """Проверяет имя пакета по PEP 508."""
     if not NAME_RE.match(value):
         raise ConfigError(f"package_name: invalid name {value!r}")
     return value
 
 
 def parse_test_repo_mode(value):
+    """Преобразует true/false в bool."""
     if value not in ("true", "false"):
-        raise ConfigError(f"test_repo_mode: expected true/false, got {value!r}")
+        raise ConfigError(
+            f"test_repo_mode: expected true/false, got {value!r}"
+        )
     return value == "true"
 
 
 def parse_repo(value, test_mode):
+    """В тестовом режиме ждёт путь к файлу, иначе http(s) URL."""
     if test_mode:
         if not os.path.isfile(value):
-            raise ConfigError(f"repo: test repository file not found: {value!r}")
+            raise ConfigError(
+                f"repo: test repository file not found: {value!r}"
+            )
         return value
     url = urlparse(value)
     if url.scheme not in ("http", "https") or not url.netloc:
@@ -61,12 +73,14 @@ def parse_repo(value, test_mode):
 
 
 def parse_version(value):
+    """Проверяет версию по PEP 440 (1.2.3, 2.0rc1, 1.0.post1, 1.0.dev2)."""
     if not VERSION_RE.match(value):
         raise ConfigError(f"version: invalid version {value!r}")
     return value
 
 
 def parse_max_depth(value):
+    """Проверяет, что глубина — целое число >= 1."""
     try:
         depth = int(value)
     except ValueError:
@@ -77,6 +91,7 @@ def parse_max_depth(value):
 
 
 def load_config(path):
+    """Загружает и проверяет все параметры конфига."""
     raw = read_csv(path)
     test_mode = parse_test_repo_mode(raw["test_repo_mode"])
     return {
