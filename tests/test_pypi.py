@@ -76,20 +76,26 @@ class PypiRepoTest(unittest.TestCase):
         self.assertEqual(url, "https://pypi.org/pypi/requests/2.31.0/json")
 
     @mock.patch.object(pypi.urllib.request, "urlopen")
-    def test_run_prints_direct_deps(self, urlopen):
-        """run печатает пакет и его прямые зависимости."""
-        urlopen.return_value = fake_response(REQUESTS_2_31)
+    def test_run_prints_graph(self, urlopen):
+        """Корень берётся в заданной версии, зависимости — в последней."""
+        def respond(url, timeout):
+            """requests зависит от четырёх пакетов, они — ни от чего."""
+            if "/requests/" in url:
+                return fake_response(REQUESTS_2_31)
+            return fake_response([])
+        urlopen.side_effect = respond
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             code = run(["--config", os.path.join(CONFIGS, "pypi.csv")])
         self.assertEqual(code, 0)
         self.assertEqual(out.getvalue().splitlines(), [
-            "requests==2.31.0:",
-            "  charset-normalizer",
-            "  idna",
-            "  urllib3",
-            "  certifi",
+            "requests -> charset-normalizer, idna, urllib3, certifi",
+            "charset-normalizer", "idna", "urllib3", "certifi",
         ])
+        urls = [c[0][0] for c in urlopen.call_args_list]
+        base = "https://pypi.org/pypi"
+        self.assertEqual(urls[0], f"{base}/requests/2.31.0/json")
+        self.assertEqual(urls[1], f"{base}/charset-normalizer/json")
 
     @mock.patch.object(pypi.urllib.request, "urlopen")
     def test_http_error(self, urlopen):

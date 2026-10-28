@@ -4,7 +4,9 @@ import argparse
 import sys
 
 from config import ConfigError, load_config
+from graph import build_graph, format_graph
 from pypi import PypiRepo, RepoError
+from testrepo import FileRepo
 
 
 def parse_args(argv=None):
@@ -18,25 +20,29 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
-def print_direct_deps(cfg):
-    """Печатает прямые зависимости пакета заданной версии."""
+def make_repo(cfg):
+    """Создаёт тестовый или PyPI-репозиторий по настройкам."""
     if cfg["test_repo_mode"]:
-        raise RepoError("test repository mode is not supported yet")
-    repo = PypiRepo(cfg["repo"])
-    deps = repo.get_deps(cfg["package_name"], cfg["version"])
-    print(f"{cfg['package_name']}=={cfg['version']}:")
-    for name in deps:
-        print(f"  {name}")
-    if not deps:
-        print("  (no dependencies)")
+        return FileRepo(cfg["repo"])
+    return PypiRepo(cfg["repo"])
+
+
+def print_graph(cfg):
+    """Строит граф зависимостей и печатает его."""
+    graph = build_graph(
+        make_repo(cfg), cfg["package_name"], cfg["version"],
+        cfg["max_depth"],
+    )
+    for line in format_graph(graph):
+        print(line)
 
 
 def run(argv=None):
-    """Загружает конфиг и печатает прямые зависимости, при ошибке — 1."""
+    """Загружает конфиг и печатает граф зависимостей, при ошибке — 1."""
     args = parse_args(argv)
     try:
         cfg = load_config(args.config)
-        print_direct_deps(cfg)
+        print_graph(cfg)
     except (ConfigError, RepoError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
