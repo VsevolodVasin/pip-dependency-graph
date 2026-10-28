@@ -1,0 +1,6 @@
+key,value
+package_name,six
+repo,https://pypi.org/pypi
+test_repo_mode,false
+version,1.16.0
+max_depth,3

@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from config import ConfigError, load_config
+from pypi import PypiRepo, RepoError
 
 
 def parse_args(argv=None):
@@ -17,23 +18,28 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
-def print_config(cfg):
-    """Печатает параметры в формате ключ=значение."""
-    for key, value in cfg.items():
-        if isinstance(value, bool):
-            value = str(value).lower()
-        print(f"{key}={value}")
+def print_direct_deps(cfg):
+    """Печатает прямые зависимости пакета заданной версии."""
+    if cfg["test_repo_mode"]:
+        raise RepoError("test repository mode is not supported yet")
+    repo = PypiRepo(cfg["repo"])
+    deps = repo.get_deps(cfg["package_name"], cfg["version"])
+    print(f"{cfg['package_name']}=={cfg['version']}:")
+    for name in deps:
+        print(f"  {name}")
+    if not deps:
+        print("  (no dependencies)")
 
 
 def run(argv=None):
-    """Загружает конфиг и печатает его, при ошибке возвращает 1."""
+    """Загружает конфиг и печатает прямые зависимости, при ошибке — 1."""
     args = parse_args(argv)
     try:
         cfg = load_config(args.config)
-    except ConfigError as e:
+        print_direct_deps(cfg)
+    except (ConfigError, RepoError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-    print_config(cfg)
     return 0
 
 

@@ -6,6 +6,10 @@
 
 Этап 1: минимальное CLI-приложение, параметры читаются из CSV-конфига.
 
+Этап 2: получение прямых зависимостей заданной версии пакета из
+репозитория PyPI (JSON API `{repo}/{name}/{version}/json`, поле
+`requires_dist`). Менеджеры пакетов и сторонние библиотеки не используются.
+
 ## Запуск
 
 ```bash
@@ -38,15 +42,30 @@ max_depth,3
 | `version` | Версия пакета (PEP 440) |
 | `max_depth` | Максимальная глубина анализа, `>= 1` |
 
-При запуске все параметры выводятся в формате `ключ=значение`.
-При ошибке печатается `error: ...`, код выхода `1`.
+При запуске выводятся прямые зависимости пакета:
+
+```
+$ ./run.sh --config configs/pypi.csv
+requests==2.31.0:
+  charset-normalizer
+  idna
+  urllib3
+  certifi
+```
+
+Имена нормализуются по PEP 503. Зависимости, подключаемые только через
+extras (`; extra == "..."`), пропускаются. Режим тестового репозитория
+на этом этапе ещё не поддерживается.
+
+При ошибке (конфиг, HTTP 404, нет сети) печатается `error: ...`,
+код выхода `1`.
 
 ## Модули
 
 `main.py`
 
 - `parse_args()` — `--config`
-- `print_config()` — вывод параметров
+- `print_direct_deps()` — вывод прямых зависимостей
 - `run()` — точка входа
 
 `config.py`
@@ -55,12 +74,19 @@ max_depth,3
 - `parse_*()` — проверка параметров
 - `load_config()` — загрузка конфига
 
+`pypi.py`
+
+- `PypiRepo.get_deps()` — прямые зависимости пакета (версии)
+- `parse_requires_dist()` — разбор `requires_dist`
+- `fetch_json()` — загрузка JSON через `urllib`
+
 ## Тестовые скрипты
 
 ```bash
 ./scripts/stage1_config.sh
 ./scripts/stage1_errors.sh
 ./scripts/stage1_all.sh
+./scripts/stage2_deps.sh    # прямые зависимости (нужна сеть)
 ./scripts/run_tests.sh      # unittest из tests/
 ```
 
@@ -68,7 +94,7 @@ max_depth,3
 
 ```
 pip-dependency-graph/
-├── src/          # main.py, config.py
+├── src/          # main.py, config.py, pypi.py
 ├── tests/        # unittest
 ├── configs/      # конфиги, configs/errors/ — с ошибками
 ├── test_repos/   # тестовые репозитории

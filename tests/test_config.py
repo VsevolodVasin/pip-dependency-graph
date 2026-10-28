@@ -67,20 +67,6 @@ class LoadConfigTest(unittest.TestCase):
 class RunTest(unittest.TestCase):
     """Проверка вывода и кода возврата run."""
 
-    def test_prints_key_value(self):
-        """Параметры печатаются как ключ=значение."""
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = run(["--config", os.path.join(CONFIGS, "pypi.csv")])
-        self.assertEqual(code, 0)
-        self.assertEqual(out.getvalue().splitlines(), [
-            "package_name=requests",
-            "repo=https://pypi.org/pypi",
-            "test_repo_mode=false",
-            "version=2.31.0",
-            "max_depth=3",
-        ])
-
     def test_error_exit_code(self):
         """При ошибке сообщение уходит в stderr, код 1."""
         err = io.StringIO()
