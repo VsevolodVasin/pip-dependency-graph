@@ -79,7 +79,7 @@ class PypiRepoTest(unittest.TestCase):
     def test_run_prints_graph(self, urlopen):
         """Корень берётся в заданной версии, зависимости — в последней."""
         def respond(url, timeout):
-            """requests зависит от четырёх пакетов, они — ни от чего."""
+            """Отдаёт зависимости requests, у остальных пакетов — пусто."""
             if "/requests/" in url:
                 return fake_response(REQUESTS_2_31)
             return fake_response([])

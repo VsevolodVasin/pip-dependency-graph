@@ -109,7 +109,7 @@ class OutputTest(unittest.TestCase):
         ])
 
     def test_run_test_mode(self):
-        """run в режиме тестового репозитория печатает граф."""
+        """Вызов run в режиме тестового репозитория печатает граф."""
         cwd = os.getcwd()
         os.chdir(ROOT)
         try:

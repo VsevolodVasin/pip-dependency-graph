@@ -11,6 +11,7 @@ class ConfigError(Exception):
 
 
 KEYS = ("package_name", "repo", "test_repo_mode", "version", "max_depth")
+MIN_DEPTH = 1
 
 NAME_RE = re.compile(
     r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE
@@ -85,8 +86,10 @@ def parse_max_depth(value):
         depth = int(value)
     except ValueError:
         raise ConfigError(f"max_depth: expected integer, got {value!r}")
-    if depth < 1:
-        raise ConfigError(f"max_depth: must be >= 1, got {depth}")
+    if depth < MIN_DEPTH:
+        raise ConfigError(
+            f"max_depth: must be >= {MIN_DEPTH}, got {depth}"
+        )
     return depth
 
 
