@@ -2,10 +2,13 @@
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 
 TIMEOUT = 15
+ATTEMPTS = 3
+RETRY_DELAY = 1
 
 REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 EXTRA_RE = re.compile(r"\bextra\s*==")
@@ -54,16 +57,24 @@ def metadata_url(base, name, version=None):
 
 
 def fetch_json(url):
-    """Скачивает и разбирает JSON по URL."""
-    try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as e:
-        raise RepoError(f"{url}: HTTP {e.code}")
-    except urllib.error.URLError as e:
-        raise RepoError(f"{url}: {e.reason}")
-    except ValueError:
-        raise RepoError(f"{url}: invalid JSON")
+    """Скачивает и разбирает JSON по URL.
+
+    Сетевые сбои (обрыв соединения, таймаут) повторяются до ATTEMPTS раз,
+    HTTP-ошибки вроде 404 — нет: повтор их не исправит.
+    """
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=TIMEOUT) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as e:
+            raise RepoError(f"{url}: HTTP {e.code}")
+        except (urllib.error.URLError, OSError) as e:
+            if attempt == ATTEMPTS:
+                reason = getattr(e, "reason", e)
+                raise RepoError(f"{url}: {reason}")
+            time.sleep(RETRY_DELAY)
+        except ValueError:
+            raise RepoError(f"{url}: invalid JSON")
 
 
 class PypiRepo:

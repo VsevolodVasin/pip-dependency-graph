@@ -109,6 +109,25 @@ class PypiRepoTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("HTTP 404", err.getvalue())
 
+    @mock.patch.object(pypi.time, "sleep")
+    @mock.patch.object(pypi.urllib.request, "urlopen")
+    def test_network_retry(self, urlopen, sleep):
+        """Обрыв соединения повторяется, затем запрос проходит."""
+        urlopen.side_effect = [
+            pypi.urllib.error.URLError("EOF"), fake_response(["idna"]),
+        ]
+        self.assertEqual(PypiRepo("https://x/pypi").get_deps("a"), ["idna"])
+        self.assertEqual(urlopen.call_count, 2)
+
+    @mock.patch.object(pypi.time, "sleep")
+    @mock.patch.object(pypi.urllib.request, "urlopen")
+    def test_network_gives_up(self, urlopen, sleep):
+        """После ATTEMPTS неудач — RepoError."""
+        urlopen.side_effect = pypi.urllib.error.URLError("EOF")
+        with self.assertRaises(RepoError):
+            PypiRepo("https://x/pypi").get_deps("a")
+        self.assertEqual(urlopen.call_count, pypi.ATTEMPTS)
+
 
 if __name__ == "__main__":
     unittest.main()
