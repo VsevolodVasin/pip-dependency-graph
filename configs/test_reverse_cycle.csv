@@ -1,0 +1,6 @@
+key,value
+package_name,B
+repo,test_repos/cycle.txt
+test_repo_mode,true
+version,1.0
+max_depth,10

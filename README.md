@@ -14,11 +14,16 @@
 рекурсивный обход в глубину (DFS) с ограничением `max_depth`, обработкой
 циклов и режимом тестового репозитория.
 
+Этап 4: дополнительные операции — обратные зависимости пакета
+(`--mode reverse`).
+
 ## Запуск
 
 ```bash
 ./run.sh                            # конфиг config.csv
 ./run.sh --config configs/test.csv
+./run.sh --config configs/test_reverse.csv --mode reverse
+./run.sh --config configs/flask.csv --mode reverse --target markupsafe
 ```
 
 ## Параметры командной строки
@@ -26,6 +31,8 @@
 | Параметр | Описание |
 |---|---|
 | `--config PATH` | Путь к CSV-конфигу (по умолчанию `config.csv`) |
+| `--mode MODE` | `graph` (по умолчанию) или `reverse` |
+| `--target NAME` | Пакет, для которого ищутся обратные зависимости (по умолчанию `package_name`) |
 
 ## Конфигурация (CSV)
 
@@ -102,15 +109,61 @@ D:
 | `bad_*.txt`, `missing.txt` | ошибки формата и неописанный пакет |
 
 При ошибке (конфиг, HTTP 404, нет сети) печатается `error: ...`,
-код выхода `1`.
+код выхода `1`. Обрывы соединения с PyPI повторяются до трёх раз.
+
+## Этап 4: дополнительные операции
+
+### Обратные зависимости (`--mode reverse`)
+
+Для пакета `package_name` выводятся пакеты репозитория, которые от него
+зависят, напрямую или транзитивно. Используется тот же DFS, что и для
+прямых зависимостей, но по развёрнутым рёбрам: `max_depth` ограничивает
+длину обратного пути, циклы находятся так же.
+
+```
+$ ./run.sh --config configs/test_reverse_complex.csv --mode reverse
+G <- E, F
+E <- B, C
+B <- A, D
+A
+D <- B
+C <- A, F
+F <- C
+cycle: B <- D <- B
+cycle: C <- F <- C
+```
+
+Где ищутся зависящие пакеты:
+
+- **Тестовый репозиторий** известен целиком, поэтому зависящие пакеты
+  ищутся среди всех его пакетов; `--target` по умолчанию —
+  `package_name`.
+- **PyPI** не даёт списка пакетов, которые зависят от данного. Поэтому
+  сначала тем же DFS из этапа 3 строится граф зависимостей
+  `package_name` (в версии `version`, до `max_depth`), а затем по его
+  развёрнутым рёбрам ищутся пакеты, зависящие от `--target`. Имя
+  `--target` нормализуется по PEP 503 (`MarkupSafe` -> `markupsafe`).
+
+```
+$ ./run.sh --config configs/flask.csv --mode reverse --target markupsafe
+markupsafe <- werkzeug, jinja2
+werkzeug <- flask
+flask
+jinja2 <- flask
+
+$ ./run.sh --config configs/flask.csv --mode reverse --target nope
+error: package nope not found in dependency graph of flask
+```
 
 ## Модули
 
 `main.py`
 
-- `parse_args()` — `--config`
+- `parse_args()` — `--config`, `--mode`, `--target`
 - `make_repo()` — выбор PyPI или тестового репозитория
-- `print_graph()` — построение и вывод графа
+- `reverse_target()` — пакет для режима `reverse`
+- `make_graph()` — граф прямых или обратных зависимостей
+- `execute()` — вывод в выбранном режиме
 - `run()` — точка входа
 
 `config.py`
@@ -123,13 +176,19 @@ D:
 
 - `PypiRepo.get_deps()` — прямые зависимости пакета (версии)
 - `parse_requires_dist()` — разбор `requires_dist`
-- `fetch_json()` — загрузка JSON через `urllib`
+- `fetch_json()` — загрузка JSON через `urllib` с повтором при обрыве
 
 `graph.py`
 
 - `GraphBuilder` — рекурсивный DFS с ограничением глубины и поиском циклов
 - `build_graph()` — построение `DependencyGraph`
 - `format_graph()` — текстовый вывод
+
+`ops.py`
+
+- `ReverseRepo` — репозиторий с развёрнутыми рёбрами
+- `reverse_repo()` — обратный репозиторий: весь тестовый или граф PyPI
+- `reverse_graph()` — граф обратных зависимостей
 
 `testrepo.py`
 
@@ -144,6 +203,7 @@ D:
 ./scripts/stage1_all.sh
 ./scripts/stage2_deps.sh    # граф реальных пакетов (нужна сеть)
 ./scripts/stage3_graph.sh   # граф на тестовых репозиториях
+./scripts/stage4_ops.sh     # обратные зависимости (PyPI — нужна сеть)
 ./scripts/run_tests.sh      # unittest из tests/
 ```
 
@@ -151,7 +211,8 @@ D:
 
 ```
 pip-dependency-graph/
-├── src/          # main.py, config.py, pypi.py, graph.py, testrepo.py
+├── src/          # main.py, config.py, pypi.py, graph.py, testrepo.py,
+│                 # ops.py
 ├── tests/        # unittest
 ├── configs/      # конфиги, configs/errors/ — с ошибками
 ├── test_repos/   # тестовые репозитории

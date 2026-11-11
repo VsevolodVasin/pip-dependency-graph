@@ -88,16 +88,20 @@ def build_graph(repo, root, version, max_depth):
     return GraphBuilder(repo, root, version, max_depth).build()
 
 
-def format_graph(graph):
-    """Возвращает текстовое представление графа списком строк."""
+def format_graph(graph, arrow="->"):
+    """Возвращает текстовое представление графа списком строк.
+
+    arrow — разделитель узла и его соседей: "->" для зависимостей,
+    "<-" для обратных зависимостей.
+    """
     lines = []
     for name in graph.nodes():
         if name in graph.cut:
             lines.append(f"{name} (max depth)")
         elif graph.edges.get(name):
-            lines.append(f"{name} -> {', '.join(graph.edges[name])}")
+            lines.append(f"{name} {arrow} {', '.join(graph.edges[name])}")
         else:
             lines.append(name)
     for cycle in graph.cycles:
-        lines.append("cycle: " + " -> ".join(cycle))
+        lines.append("cycle: " + f" {arrow} ".join(cycle))
     return lines
