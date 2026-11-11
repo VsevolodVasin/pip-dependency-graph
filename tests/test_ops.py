@@ -26,10 +26,14 @@ class FakePypi:
     """PyPI без сети: flask -> werkzeug, jinja2 -> markupsafe."""
 
     def __init__(self):
-        """Прямые зависимости пакетов."""
+        """Зависимости, версии и ограничения, как их запоминает PypiRepo."""
         self.deps = {"flask": ["werkzeug", "jinja2"],
                      "werkzeug": ["markupsafe"],
                      "jinja2": ["markupsafe"], "markupsafe": []}
+        self.versions = {"flask": "3.0.0", "werkzeug": "3.1.0",
+                         "jinja2": "3.1.6", "markupsafe": "3.0.2"}
+        self.specs = {"werkzeug": {"markupsafe": ">=2.1.1"},
+                      "jinja2": {"markupsafe": ">=2.0"}}
 
     def get_deps(self, name, version=None):
         """Прямые зависимости пакета."""
@@ -89,6 +93,13 @@ class ReverseTest(unittest.TestCase):
             "markupsafe": ["werkzeug", "jinja2"], "werkzeug": ["flask"],
             "flask": [], "jinja2": ["flask"],
         })
+
+    def test_pypi_versions_and_specs(self):
+        """Версии и ограничения переносятся в обратный граф."""
+        back = reverse_repo(FakePypi(), "flask", "3.0.0", 10)
+        g = reverse_graph(back, "markupsafe", 10)
+        self.assertEqual(g.versions["werkzeug"], "3.1.0")
+        self.assertEqual(g.specs["markupsafe"]["jinja2"], ">=2.0")
 
     def test_pypi_unknown_target(self):
         """Пакета нет в графе корня — ошибка с понятным текстом."""

@@ -9,7 +9,7 @@ from unittest import mock
 
 import pypi
 from main import run
-from pypi import PypiRepo, RepoError, parse_requires_dist
+from pypi import PypiRepo, RepoError, parse_requires_dist, parse_specs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIGS = os.path.join(ROOT, "configs")
@@ -127,6 +127,37 @@ class PypiRepoTest(unittest.TestCase):
         with self.assertRaises(RepoError):
             PypiRepo("https://x/pypi").get_deps("a")
         self.assertEqual(urlopen.call_count, pypi.ATTEMPTS)
+
+    def test_specs(self):
+        """Ограничения версии и условия по каждой зависимости."""
+        self.assertEqual(parse_specs([
+            "Werkzeug>=3.0.0",
+            "importlib-metadata>=3.6.0; python_version < '3.10'",
+            "urllib3 (<3,>=1.21.1)",
+            "six",
+            "asgiref>=3.2 ; extra == \"async\"",
+            "foo<2; python_version < '3.8'",
+            "foo>=2; python_version >= '3.8'",
+        ]), {
+            "werkzeug": ">=3.0.0",
+            "importlib-metadata": ">=3.6.0; python_version < '3.10'",
+            "urllib3": "<3,>=1.21.1",
+            "six": "",
+            "foo": "<2; python_version < '3.8' | "
+                   ">=2; python_version >= '3.8'",
+        })
+
+    @mock.patch.object(pypi.urllib.request, "urlopen")
+    def test_versions_recorded(self, urlopen):
+        """Версия пакета и ограничения запоминаются для картинки."""
+        body = {"info": {"version": "3.0.0",
+                         "requires_dist": ["Werkzeug>=3.0.0"]}}
+        urlopen.return_value = contextlib.nullcontext(
+            io.BytesIO(json.dumps(body).encode()))
+        repo = PypiRepo("https://x/pypi")
+        repo.get_deps("flask", "3.0.0")
+        self.assertEqual(repo.versions, {"flask": "3.0.0"})
+        self.assertEqual(repo.specs, {"flask": {"werkzeug": ">=3.0.0"}})
 
 
 if __name__ == "__main__":

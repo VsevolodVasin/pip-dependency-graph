@@ -17,6 +17,10 @@
 Этап 4: дополнительные операции — обратные зависимости пакета
 (`--mode reverse`).
 
+Этап 5: визуализация — описание графа на языке Graphviz DOT
+(`--mode dot`), сохранение изображения (`--output graph.svg`) и показ
+его на экране (`--show`).
+
 ## Запуск
 
 ```bash
@@ -24,6 +28,7 @@
 ./run.sh --config configs/test.csv
 ./run.sh --config configs/test_reverse.csv --mode reverse
 ./run.sh --config configs/flask.csv --mode reverse --target markupsafe
+./run.sh --config configs/flask.csv --output images/flask.svg
 ```
 
 ## Параметры командной строки
@@ -31,8 +36,10 @@
 | Параметр | Описание |
 |---|---|
 | `--config PATH` | Путь к CSV-конфигу (по умолчанию `config.csv`) |
-| `--mode MODE` | `graph` (по умолчанию) или `reverse` |
+| `--mode MODE` | `graph` (по умолчанию), `reverse`, `dot` |
 | `--target NAME` | Пакет, для которого ищутся обратные зависимости (по умолчанию `package_name`) |
+| `--output FILE` | Сохранить граф: `.dot` — текстом, `.png`/`.svg`/`.pdf` — через Graphviz |
+| `--show` | Открыть изображение графа в системном просмотрщике |
 
 ## Конфигурация (CSV)
 
@@ -155,15 +162,85 @@ $ ./run.sh --config configs/flask.csv --mode reverse --target nope
 error: package nope not found in dependency graph of flask
 ```
 
+С `--output` или `--mode dot` обратный граф PyPI рисуется с теми же
+версиями и ограничениями на рёбрах (`images/flask_reverse_markupsafe.svg`).
+
+## Этап 5: визуализация
+
+`--mode dot` печатает описание графа на языке Graphviz DOT. Под именем
+пакета подписана его версия, на ребре — ограничения версии зависимости
+с условием (маркером окружения), например
+`>=3.6.0; python_version < '3.10'`. Версии известны только для PyPI: в
+тестовом репозитории их нет, а пакеты на максимальной глубине не
+запрашиваются. Корень залит цветом, узлы на максимальной глубине нарисованы пунктиром с подписью
+`max depth`, рёбра циклов — красным. В графе обратных зависимостей
+стрелка всё равно идёт от пакета к его зависимости.
+
+```
+$ ./run.sh --config configs/test.csv --mode dot
+digraph dependencies {
+    rankdir=LR;
+    node [shape=box, style=rounded, fontname="Helvetica"];
+    edge [fontname="Helvetica", fontsize=10];
+    "A" [style="rounded,filled", fillcolor="#cfe3ff"];
+    "B";
+    "D";
+    "C";
+    "A" -> "B";
+    "A" -> "C";
+    "B" -> "D";
+    "C" -> "D";
+}
+```
+
+`--output FILE` работает в любом режиме: `.dot` сохраняется как текст,
+`.png`, `.svg` и `.pdf` рендерятся программой `dot` из Graphviz
+(`brew install graphviz`). Формат и каталог проверяются до построения
+графа.
+
+`--show` выводит изображение на экран: открывает сохранённую картинку
+(или временный PNG, если `--output` не задан) в системном просмотрщике
+(`open` на macOS, `xdg-open` на Linux, `start` на Windows).
+
+```bash
+./run.sh --config configs/flask.csv --show
+```
+
+Примеры в `images/`: `pypi.svg` (requests), `flask.svg`, `six.svg`,
+`test_complex.svg`, `test_reverse_complex.svg`,
+`flask_reverse_markupsafe.svg`.
+
+### Сравнение со штатными инструментами
+
+Штатный инструмент визуализации для pip — `pipdeptree`
+(`pipdeptree -p flask --graph-output svg`). Для `flask 3.0.0` набор
+пакетов в основном совпадает (werkzeug, jinja2, markupsafe, itsdangerous,
+click, blinker), но есть расхождения:
+
+- `pipdeptree` строит граф по установленным пакетам, а здесь граф
+  строится по метаданным PyPI без установки.
+- Маркеры окружения (`; python_version < "3.10"`) здесь не вычисляются,
+  поэтому в граф попадает `importlib-metadata`, который pip на
+  Python 3.10+ не ставит и `pipdeptree` не покажет.
+- Зависимости берутся в последней версии, а pip выбирает версию под
+  ограничения (`Werkzeug>=3.0.0`) и уже установленные пакеты; у другой
+  версии может быть другой набор зависимостей.
+- Под пакетом здесь подписана последняя версия с PyPI (у корня — версия
+  из конфига), а `pipdeptree` показывает установленную; на рёбрах оба
+  подписывают ограничения, но здесь к ним добавлено условие маркера.
+- Глубина здесь ограничена `max_depth`, `pipdeptree` показывает всё
+  дерево.
+
 ## Модули
 
 `main.py`
 
-- `parse_args()` — `--config`, `--mode`, `--target`
+- `parse_args()` — `--config`, `--mode`, `--target`, `--output`, `--show`
 - `make_repo()` — выбор PyPI или тестового репозитория
 - `reverse_target()` — пакет для режима `reverse`
 - `make_graph()` — граф прямых или обратных зависимостей
-- `execute()` — вывод в выбранном режиме
+- `output_lines()` — строки вывода для режима
+- `execute()` — вывод, сохранение в файл и показ картинки
 - `run()` — точка входа
 
 `config.py`
@@ -174,8 +251,10 @@ error: package nope not found in dependency graph of flask
 
 `pypi.py`
 
-- `PypiRepo.get_deps()` — прямые зависимости пакета (версии)
+- `PypiRepo.get_deps()` — прямые зависимости пакета (версии), запоминает
+  версию пакета и ограничения зависимостей
 - `parse_requires_dist()` — разбор `requires_dist`
+- `parse_specs()` — ограничения версий и условия зависимостей
 - `fetch_json()` — загрузка JSON через `urllib` с повтором при обрыве
 
 `graph.py`
@@ -189,6 +268,13 @@ error: package nope not found in dependency graph of flask
 - `ReverseRepo` — репозиторий с развёрнутыми рёбрами
 - `reverse_repo()` — обратный репозиторий: весь тестовый или граф PyPI
 - `reverse_graph()` — граф обратных зависимостей
+
+`viz.py`
+
+- `to_dot()` — описание графа на Graphviz DOT с версиями и ограничениями
+- `check_output()` — проверка формата и каталога файла
+- `save()` — сохранение `.dot` или рендер через `dot`
+- `show()` — показ изображения в системном просмотрщике
 
 `testrepo.py`
 
@@ -204,6 +290,7 @@ error: package nope not found in dependency graph of flask
 ./scripts/stage2_deps.sh    # граф реальных пакетов (нужна сеть)
 ./scripts/stage3_graph.sh   # граф на тестовых репозиториях
 ./scripts/stage4_ops.sh     # обратные зависимости (PyPI — нужна сеть)
+./scripts/stage5_viz.sh     # DOT и картинки в images/ (нужны сеть и Graphviz)
 ./scripts/run_tests.sh      # unittest из tests/
 ```
 
@@ -212,11 +299,12 @@ error: package nope not found in dependency graph of flask
 ```
 pip-dependency-graph/
 ├── src/          # main.py, config.py, pypi.py, graph.py, testrepo.py,
-│                 # ops.py
+│                 # ops.py, viz.py
 ├── tests/        # unittest
 ├── configs/      # конфиги, configs/errors/ — с ошибками
 ├── test_repos/   # тестовые репозитории
 ├── scripts/      # bash-обёртки для прогона тестов
+├── images/       # картинки графов (этап 5)
 ├── config.csv
 ├── run.sh
 └── README.md

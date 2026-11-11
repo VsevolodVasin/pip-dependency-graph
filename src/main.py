@@ -8,8 +8,9 @@ from graph import build_graph, format_graph
 from ops import reverse_graph, reverse_repo
 from pypi import PypiRepo, RepoError, normalize
 from testrepo import FileRepo
+from viz import RenderError, check_output, save, show, to_dot
 
-MODES = ("graph", "reverse")
+MODES = ("graph", "reverse", "dot")
 
 
 def parse_args(argv=None):
@@ -22,12 +23,21 @@ def parse_args(argv=None):
     )
     p.add_argument(
         "--mode", choices=MODES, default="graph",
-        help="graph — граф зависимостей, reverse — обратные зависимости",
+        help="graph — граф зависимостей, reverse — обратные зависимости, "
+             "dot — описание на Graphviz DOT",
     )
     p.add_argument(
         "--target", metavar="NAME",
         help="пакет, обратные зависимости которого ищутся в режиме "
              "reverse (по умолчанию package_name)",
+    )
+    p.add_argument(
+        "--output", metavar="FILE",
+        help="сохранить граф в FILE (.dot, .png, .svg, .pdf)",
+    )
+    p.add_argument(
+        "--show", action="store_true",
+        help="открыть изображение графа в системном просмотрщике",
     )
     return p.parse_args(argv)
 
@@ -66,12 +76,26 @@ def make_graph(cfg, reverse, target=None):
     )
 
 
+def output_lines(graph, mode, reverse):
+    """Строки вывода для выбранного режима."""
+    if mode == "dot":
+        return to_dot(graph, reverse).splitlines()
+    return format_graph(graph, "<-" if reverse else "->")
+
+
 def execute(cfg, args):
-    """Строит граф и печатает его в выбранном режиме."""
+    """Строит граф, печатает его, сохраняет в файл и показывает картинку."""
+    if args.output:
+        check_output(args.output)
     reverse = args.mode == "reverse"
     graph = make_graph(cfg, reverse, args.target)
-    for line in format_graph(graph, "<-" if reverse else "->"):
+    for line in output_lines(graph, args.mode, reverse):
         print(line)
+    if args.output:
+        save(to_dot(graph, reverse), args.output)
+        print(f"saved: {args.output}", file=sys.stderr)
+    if args.show:
+        show(to_dot(graph, reverse), args.output)
 
 
 def run(argv=None):
@@ -80,7 +104,7 @@ def run(argv=None):
     try:
         cfg = load_config(args.config)
         execute(cfg, args)
-    except (ConfigError, RepoError) as e:
+    except (ConfigError, RepoError, RenderError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

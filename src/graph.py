@@ -10,6 +10,8 @@ class DependencyGraph:
         self.edges = {}
         self.cut = set()
         self.cycles = []
+        self.versions = {}
+        self.specs = {}
 
     def nodes(self):
         """Все узлы графа в порядке обхода."""
@@ -46,8 +48,14 @@ class GraphBuilder:
         self.cache = {}
 
     def build(self):
-        """Строит граф от корня и возвращает DependencyGraph."""
+        """Строит граф от корня и возвращает DependencyGraph.
+
+        Версии пакетов и ограничения зависимостей копируются из
+        репозитория, если он их знает (PyPI), для подписей на картинке.
+        """
         self._dfs(self.graph.root, 0, [])
+        self.graph.versions = dict(getattr(self.repo, "versions", {}))
+        self.graph.specs = dict(getattr(self.repo, "specs", {}))
         return self.graph
 
     def _deps(self, name):

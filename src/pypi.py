@@ -38,6 +38,40 @@ def parse_requirement(req):
     return normalize(m.group(1))
 
 
+def requirement_spec(req):
+    """Ограничения версии и условие из строки requires_dist.
+
+    'importlib-metadata>=3.6.0; python_version < "3.10"' ->
+    '>=3.6.0; python_version < "3.10"'. Скобки старого формата
+    'urllib3 (<3,>=1.21.1)' снимаются.
+    """
+    spec, _, marker = req.partition(";")
+    m = REQ_NAME_RE.match(spec)
+    version = spec[m.end():].strip() if m else ""
+    version = version.strip("()").replace(" ", "")
+    marker = marker.strip()
+    return "; ".join(part for part in (version, marker) if part)
+
+
+def parse_specs(requires):
+    """Словарь имя зависимости -> ограничения версии с условиями.
+
+    Если пакет указан несколько раз (под разными условиями), строки
+    объединяются через ' | '.
+    """
+    specs = {}
+    for req in requires or []:
+        name = parse_requirement(req)
+        if not name:
+            continue
+        spec = requirement_spec(req)
+        if name in specs and spec:
+            specs[name] = " | ".join(s for s in (specs[name], spec) if s)
+        else:
+            specs.setdefault(name, spec)
+    return specs
+
+
 def parse_requires_dist(requires):
     """Возвращает список имён прямых зависимостей без повторов."""
     names = []
@@ -83,12 +117,19 @@ class PypiRepo:
     def __init__(self, base_url):
         """Запоминает базовый URL репозитория."""
         self.base_url = base_url
+        self.versions = {}
+        self.specs = {}
 
     def get_deps(self, name, version=None):
         """Возвращает прямые зависимости пакета заданной версии.
 
         Если версия не указана, берётся последняя версия пакета.
+        Версия пакета и ограничения его зависимостей запоминаются в
+        versions и specs для подписей на изображении графа.
         """
         data = fetch_json(metadata_url(self.base_url, name, version))
         info = data.get("info") or {}
-        return parse_requires_dist(info.get("requires_dist"))
+        requires = info.get("requires_dist")
+        self.versions[name] = info.get("version") or version or ""
+        self.specs[name] = parse_specs(requires)
+        return parse_requires_dist(requires)
